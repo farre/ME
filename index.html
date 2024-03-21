@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<head>
+  <style>
+    td:empty:not(.error) {
+      background-color: lightgray;
+    }
+
+    .error {
+      background-color: lightred;
+    }
+  </style>
+</head>
+<table id="overview" border="1px">
+  <tr>
+    <th>Period</th>
+    <th>ME</th>
+    <th>WeightedBurnDownTime</th>
+    <th>Opened bugs</th>
+    <th>Closed bugs</th>
+  </tr>
+</table>
+<br />
+<table id="details" border="1px">
+  <tr>
+    <th>Period</th>
+    <th>ME</th>
+    <th>Opened bugs</th>
+    <th>Opened S1</th>
+    <th>Opened S2</th>
+    <th>Opened S3</th>
+    <th>Opened S4</th>
+    <th>Opened --</th>
+    <th>Closed bugs</th>
+    <th>Closed bugs S1</th>
+    <th>Closed bugs S2</th>
+    <th>Closed bugs S3</th>
+    <th>Closed bugs S4</th>
+    <th>Closed bugs --</th>
+  </tr>
+</table>
+<br />
+<table id="totals" border="1px">
+  <tr>
+    <th>Open</th>
+    <th>Open S1</th>
+    <th>Open S2</th>
+    <th>Open S3</th>
+    <th>Open S4</th>
+    <th>Open --</th>
+  </tr>
+</table>
+
+<script src="me.js"></script>
+<script>
+  function add_cell(weeks, callback, row) {
+    let cell = document.createElement("td");
+    row.appendChild(cell);
+    return callback(weeks)
+      .then((result) => (cell.innerText = result))
+      .catch((_) => cell.setAttribute("class", "error"));
+  }
+
+  async function fill() {
+    const me = new ME();
+    let promises = [];
+
+    const periods = [1, 4, 12];
+    const overview_callbacks = [
+      (w) => Promise.resolve(w + " weeks"),
+      (w) => me.maintenance_effectiveness(w),
+      (w) => me.weighted_burn_down_time(w),
+      (w) => me.opened_defects(w),
+      (w) => me.closed_defects(w),
+    ];
+    const details_callbacks = [
+      (w) => Promise.resolve(w + " weeks"),
+      (w) => me.maintenance_effectiveness(w),
+      (w) => me.opened_defects(w),
+      (w) => me.opened_defects(w, "S1"),
+      (w) => me.opened_defects(w, "S2"),
+      (w) => me.opened_defects(w, "S3"),
+      (w) => me.opened_defects(w, "S4"),
+      (w) => me.opened_defects(w, "--"),
+      (w) => me.closed_defects(w),
+      (w) => me.closed_defects(w, "S1"),
+      (w) => me.closed_defects(w, "S2"),
+      (w) => me.closed_defects(w, "S3"),
+      (w) => me.closed_defects(w, "S4"),
+      (w) => me.closed_defects(w, "--"),
+    ];
+    const totals_callbacks = [
+      () => me.open_defects(),
+      () => me.open_defects("S1"),
+      () => me.open_defects("S2"),
+      () => me.open_defects("S3"),
+      () => me.open_defects("S4"),
+      () => me.open_defects("--"),
+    ];
+    for (const period of periods) {
+      overview.appendChild(document.createElement("tr"));
+      for (const callback of overview_callbacks) {
+        promises.push(add_cell(period, callback, overview.lastChild));
+      }
+
+      details.appendChild(document.createElement("tr"));
+      for (const callback of details_callbacks) {
+        promises.push(add_cell(period, callback, details.lastChild));
+      }
+    }
+
+    totals.appendChild(document.createElement("tr"));
+    for (const callback of totals_callbacks) {
+      promises.push(add_cell(null, callback, totals.lastChild));
+    }
+
+    await Promise.all(promises);
+  }
+
+  addEventListener("load", fill, { once: true });
+</script>
