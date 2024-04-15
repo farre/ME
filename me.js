@@ -163,41 +163,41 @@ class ME {
 
   constructor() {}
 
-  async #run(results, callback, weeks, severity) {
+  async #get_link(results, callback, weeks, severity) {
     const { defects, link } = this.#get_result(results, callback, weeks);
     const { label, discriminator } = formatting(severity);
     const result = await defects;
     return `<a href="${link}&${discriminator}">${result[label]}</a>`;
   }
 
-  async #run2(results, callback, weeks) {
+  async #get_weighted_result(results, callback, weeks) {
     const { defects } = this.#get_result(results, callback, weeks);
     const result = await defects;
     return result.weighted_result;
   }
 
   open_defects(severity) {
-    return this.#run(this.#open, total_open, Infinity);
+    return this.#get_link(this.#open, total_open, Infinity, severity);
   }
 
   closed_defects(weeks, severity) {
-    return this.#run(this.#closed, closed, weeks, severity);
+    return this.#get_link(this.#closed, closed, weeks, severity);
   }
 
   async opened_defects(weeks, severity) {
-    return this.#run(this.#opened, opened, weeks, severity);
+    return this.#get_link(this.#opened, opened, weeks, severity);
   }
 
   async weighted_open_defects() {
-    return this.#run2(this.#open, total_open, Infinity);
+    return this.#get_weighted_result(this.#open, total_open, Infinity);
   }
 
   async weighted_closed_defects(weeks) {
-    return this.#run2(this.#closed, closed, weeks);
+    return this.#get_weighted_result(this.#closed, closed, weeks);
   }
 
   async weighted_opened_defects(weeks) {
-    return this.#run2(this.#opened, opened, weeks);
+    return this.#get_weighted_result(this.#opened, opened, weeks);
   }
 
   async maintenance_effectiveness(weeks) {
