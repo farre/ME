@@ -10,6 +10,10 @@
       background-color: red;
       opacity: 65%;
     }
+
+    .hidden {
+      display: none;
+    }
   </style>
 </head>
 <table id="overview" border="1px">
@@ -57,7 +61,8 @@
 <input type="text" id="key" name="key" value=""><br>
 <label for="username"><a href="https://bugzilla.mozilla.org/userprefs.cgi?tab=account">User name</a>: </label>
 <input type="text" id="username" name="username" value=""><br>
-<input type="button" id="fill" value="Get values"> <input type="button" id="abort" value="Abort" />
+<input type="button" id="fill" value="Get values">
+<input type="button" id="abort" value="Abort" class="hidden">
 
 <script src="me.js"></script>
 <script>
@@ -78,6 +83,10 @@
   }
 
   async function fill() {
+    const fill = document.getElementById('fill');
+    const abort = document.getElementById('abort');
+    fill.setAttribute("class", "hidden");
+    abort.setAttribute("class", "");
     const auth = get_auth();
     const me = new ME(auth);
     let promises = [];
@@ -133,7 +142,11 @@
 
     abort.addEventListener("click", () => me.abort(), { once });
 
-    await Promise.all(promises);
+    try {
+      await Promise.all(promises);
+    } finally {
+      abort.setAttribute("class", "hidden");
+    }
   }
   const button = document.getElementById('fill');
   button.addEventListener("click", fill, { once });
