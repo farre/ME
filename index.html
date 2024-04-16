@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <head>
   <style>
     td:empty:not(.error) {
@@ -52,12 +53,21 @@
 </table>
 
 <br />
-
-<input type="button" id="abort" value="Abort" />
+<label for="key"><a href="https://bugzilla.mozilla.org/userprefs.cgi?tab=apikey">API key</a>: </label>
+<input type="text" id="key" name="key" value=""><br>
+<label for="username"><a href="https://bugzilla.mozilla.org/userprefs.cgi?tab=account">User name</a>: </label>
+<input type="text" id="username" name="username" value=""><br>
+<input type="button" id="fill" value="Get values"> <input type="button" id="abort" value="Abort" />
 
 <script src="me.js"></script>
 <script>
   const once = true;
+
+  function get_auth() {
+    const api_key = key.value;
+    const user = username.value;
+    return (api_key.trim() != "") && (user.trim() != "") && { api_key, user };
+  }
 
   function add_cell(weeks, callback, row) {
     let cell = document.createElement("td");
@@ -68,7 +78,8 @@
   }
 
   async function fill() {
-    const me = new ME();
+    const auth = get_auth();
+    const me = new ME(auth);
     let promises = [];
 
     const periods = [1, 4, 12];
@@ -124,6 +135,6 @@
 
     await Promise.all(promises);
   }
-
-  addEventListener("load", fill, { once });
+  const button = document.getElementById('fill');
+  button.addEventListener("click", fill, { once });
 </script>

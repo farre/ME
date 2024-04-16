@@ -59,10 +59,11 @@ function query_string(params) {
   return params.join("&");
 }
 
-async function rest(endpoint, signal, params) {
+async function rest(endpoint, signal, raw_headers, params) {
   const uri = new URL(`rest/${endpoint}`, base);
   uri.search = query_string(params);
-  const response = await fetch(uri, { signal });
+  const headers = new Headers(raw_headers);
+  const response = await fetch(uri, { signal, headers });
   return await response.json();
 }
 
@@ -80,13 +81,33 @@ function formatting(severity) {
   return { label, discriminator };
 }
 
+async function get_authentication(controller, {user, api_key}) {
+  if (!username || !api_key) {
+    return {};
+  }
+  const {users} = await rest("user", controller.signal, {}, { names: user })
+  if (users.length == 0) {
+    return {};
+  }
+
+  const id = users[0].id;
+  return { id, api_key };
+}
+
 class ME {
+  async #auth_header() {
+    const auth = await this.#auth;
+    return Object.keys(auth).length ? {"X-BUGZILLA-API-KEY": auth.api_key} : {};
+  }
+
   async *#search(params, limit) {
     let offset = 0;
     const signal = this.#controller.signal;
+    const auth_header = await this.#auth_header();
+    const {id} = await this.#auth;
     async function* helper() {
       while (true) {
-        yield await rest("bug", signal, [{ offset, limit }, ...params]);
+        yield await rest("bug", signal, auth_header, [{ offset, limit }, {...id}, ...params]);
         offset += limit;
       }
     }
@@ -156,12 +177,15 @@ class ME {
     return entry;
   }
 
+  #auth;
   #open = [];
   #closed = [];
   #opened = [];
   #controller = new AbortController();
 
-  constructor() {}
+  constructor(auth) {
+    this.#auth = get_authentication(this.#controller, auth);
+  }
 
   async #get_link(results, callback, weeks, severity) {
     const { defects, link } = this.#get_result(results, callback, weeks);
