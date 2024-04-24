@@ -23,22 +23,27 @@ const f1 = "resolution";
 
 const header = { query_format, bug_type, include_fields, team_name };
 
-function opened(num_weeks) {
-  const period = new Period("[Bug creation]", num_weeks);
-  return [header, period];
+function get_header(me) {
+  const team_name = me.team_name;
+  return { query_format, bug_type, include_fields, team_name };
 }
 
-function total_open() {
+function opened(me, num_weeks) {
+  const period = new Period("[Bug creation]", num_weeks);
+  return [get_header(me), period];
+}
+
+function total_open(me) {
   const resolution = "---";
   const o1 = "empty";
-  return [header, { f1, resolution, o1 }];
+  return [get_header(me), { f1, resolution, o1 }];
 }
 
-function closed(num_weeks) {
+function closed(me, num_weeks) {
   const period = new Period("cf_last_resolved", num_weeks);
   const v1 = "---";
   const o1 = "notequals";
-  return [header, { f1, o1, v1 }, period];
+  return [get_header(me), { f1, o1, v1 }, period];
 }
 
 function query_string(params) {
@@ -166,7 +171,7 @@ class ME {
       return result;
     }
 
-    const input = callback(weeks);
+    const input = callback(this, weeks);
 
     const entry = {
       weeks,
@@ -183,8 +188,9 @@ class ME {
   #opened = [];
   #controller = new AbortController();
 
-  constructor(auth) {
+  constructor(auth, team_name) {
     this.#auth = get_authentication(this.#controller, auth);
+    this.team_name = team_name;
   }
 
   async #get_link(results, callback, weeks, severity) {

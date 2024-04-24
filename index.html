@@ -16,6 +16,12 @@
     }
   </style>
 </head>
+<table id="teamname" border="1px">
+  <tr>
+    <th>Team Name</th>
+  </tr>
+</table>
+<br>
 <table id="overview" border="1px">
   <tr>
     <th>Period</th>
@@ -56,22 +62,37 @@
   </tr>
 </table>
 
-<br />
+<br /><div id="input">
+<label for="team"><select required="true" id="team" name="team"></select></label><br>
 <label for="key"><a href="https://bugzilla.mozilla.org/userprefs.cgi?tab=apikey">API key</a>: </label>
 <input type="password" id="key" name="key" value=""><br>
 <label for="username"><a href="https://bugzilla.mozilla.org/userprefs.cgi?tab=account">User name</a>: </label>
 <input type="text" id="username" name="username" value=""><br>
 <input type="button" id="fill" value="Get values">
-<input type="button" id="abort" value="Abort" class="hidden">
+</div>
+<input type="button" id="abort" value="Abort" class="hidden"><br>
+<a href="https://bugzilla.mozilla.org/userprefs.cgi?tab=settings">Set your TimeZone!</a>
 
 <script src="me.js"></script>
 <script>
   const once = true;
+  const teams = ["DOM Core", "DOM LWS"];
+
+  for (const entry of teams) {
+    const option = document.createElement("option");
+    option.value = entry;
+    option.innerText = entry;
+    team.appendChild(option);
+  }
 
   function get_auth() {
     const api_key = key.value;
     const user = username.value;
     return (api_key.trim() != "") && (user.trim() != "") && { api_key, user };
+  }
+
+  function get_team() {
+    return team.selectedOptions[0].value;
   }
 
   function add_cell(weeks, callback, row) {
@@ -83,13 +104,17 @@
   }
 
   async function fill() {
-    const fill = document.getElementById('fill');
+    const input = document.getElementById('input');
     const abort = document.getElementById('abort');
-    fill.setAttribute("class", "hidden");
+    input.setAttribute("class", "hidden");
     abort.setAttribute("class", "");
     const auth = get_auth();
-    const me = new ME(auth);
+    const team_name = get_team();
+    const me = new ME(auth, team_name);
     let promises = [];
+
+    teamname.appendChild(document.createElement("tr"));
+    add_cell(null, () => { return Promise.resolve(team_name); }, teamname.lastChild)
 
     const periods = [1, 4, 12];
     const overview_callbacks = [
