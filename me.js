@@ -2,165 +2,103 @@
 const base = "https://bugzilla.mozilla.org/";
 const now = Date.now();
 
-function query(o) {
+function encode_query_string(o) {
   return Object.keys(o).map((k) => `${k}=${encodeURIComponent(o[k])}`);
 }
 
 class Period {
-  static week = new Date(0).setDate(7).valueOf();
-
   constructor(chfield, num_weeks) {
-    const week = new Date(0).setDate(7).valueOf();
+    const week = new Date(0).setDate(8).valueOf();
     this.chfield = chfield;
     this.chfieldfrom = new Date(now - week * num_weeks).toISOString();
     this.chfieldto = new Date(now).toISOString();
   }
 }
 
-async function rest(endpoint, params) {
-  const uri = new URL(`rest/${endpoint}`, base);
+const team_name = "DOM Core";
+const query_format = "advanced";
+const include_fields = "severity";
+const bug_type = "defect";
+const f1 = "resolution";
+
+const header = { query_format, bug_type, include_fields, team_name };
+
+function opened(num_weeks) {
+  const period = new Period("[Bug creation]", num_weeks);
+  return [header, period];
+}
+
+function total_open() {
+  const resolution = "---";
+  const o1 = "empty";
+  return [header, { f1, resolution, o1 }];
+}
+
+function closed(num_weeks) {
+  const period = new Period("cf_last_resolved", num_weeks);
+  const v1 = "---";
+  const o1 = "notequals";
+  return [header, { f1, o1, v1 }, period];
+}
+
+function query_string(params) {
   params = params ?? "";
   if (params instanceof Array) {
     params = params.flatMap((value) => {
       if (typeof value !== "object") {
         return value;
       }
-      return query(value);
+      return encode_query_string(value);
     });
   } else if (typeof params === "object") {
-    params = query(params);
+    params = encode_query_string(params);
   } else {
     params = [encodeURIComponent(params)];
   }
 
-  uri.search = params.join("&");
-  const response = await fetch(uri);
+  return params.join("&");
+}
+
+async function rest(endpoint, signal, params) {
+  const uri = new URL(`rest/${endpoint}`, base);
+  uri.search = query_string(params);
+  const response = await fetch(uri, { signal });
   return await response.json();
 }
 
-async function* search(params, limit) {
-  let offset = 0;
-  async function* helper() {
-    while (true) {
-      yield await rest("bug", [{ offset }, { limit }, ...params]);
-      offset += limit;
-    }
-  }
-
-  let result = [];
-  for await (const { bugs } of helper()) {
-    for (const bug of bugs) {
-      yield bug;
-    }
-
-    if (bugs.length < limit) {
-      break;
-    }
-  }
+function create_link(params) {
+  const uri = new URL("buglist.cgi", base);
+  uri.search = query_string(params);
+  return uri.href;
 }
 
-const products = ["Core", "Toolkit"].map((product) => {
-  return { product };
-});
-
-const components = [
-  "about:memory",
-  "Cycle Collector",
-  "DOM: Bindings (WebIDL)",
-  "DOM: Copy & Paste and Drag & Drop",
-  "DOM: Core & HTML",
-  "DOM: Editor",
-  "DOM: Events",
-  "DOM: Forms",
-  "DOM: Geolocation",
-  "DOM: HTML Parser",
-  "DOM: Navigation",
-  "DOM: Selection",
-  "DOM: Serializers",
-  "DOM: UI Events & Focus Handling",
-  "DOM: Window and Location",
-  "XML",
-  "XPConnect",
-  "XSLT",
-].map((component) => {
-  return { component };
-});
-
-async function* opened(num_weeks) {
-  const query_format = "advanced";
-  const period = new Period("[Bug creation]", num_weeks);
-  const include_fields = "severity";
-  const bug_type = "defect";
-  yield* search(
-    [
-      { query_format },
-      period,
-      { include_fields },
-      { bug_type },
-      { include_fields },
-      ...products,
-      ...components,
-    ],
-    500
-  );
-}
-
-async function* total_open() {
-  const query_format = "advanced";
-  const include_fields = "severity";
-  const bug_type = "defect";
-  const f1 = "resolution";
-  const resolution = "---";
-  const o1 = "empty";
-  yield* search(
-    [
-      { query_format },
-      { include_fields },
-      { f1, resolution, o1 },
-      { bug_type },
-      { include_fields },
-      ...products,
-      ...components,
-    ],
-    500
-  );
-}
-
-async function* closed(num_weeks) {
-  const query_format = "advanced";
-  const period = new Period("cf_last_resolved", num_weeks);
-  const include_fields = "severity";
-  const bug_type = "defect";
-  const f1 = "resolution";
-  const v1 = "---";
-  yield* search(
-    [
-      { query_format },
-      period,
-      { include_fields },
-      { bug_type },
-      { f1 },
-      { v1 },
-      ...products,
-      ...components,
-    ],
-    500
-  );
+function formatting(severity) {
+  const label = severity ?? "result";
+  const discriminator = severity
+    ? `f2=bug_severity&o2=equals&v2=${severity}`
+    : "";
+  return { label, discriminator };
 }
 
 class ME {
-  static #weight(severity) {
-    switch (severity) {
-      case "S1":
-        return 8;
-      case "S2":
-        return 5;
-      case "S3":
-        return 2;
-      case "S4":
-        return 1;
-      default:
-        return 3;
+  async *#search(params, limit) {
+    let offset = 0;
+    const signal = this.#controller.signal;
+    async function* helper() {
+      while (true) {
+        yield await rest("bug", signal, [{ offset, limit }, ...params]);
+        offset += limit;
+      }
+    }
+
+    for await (const { bugs } of helper()) {
+      for (const bug of bugs) {
+        yield bug;
+      }
+
+      if (bugs.length < limit) {
+        break;
+      }
     }
   }
 
@@ -201,61 +139,65 @@ class ME {
     return { S1, S2, S3, S4, "--": UNTRIAGED, result, weighted_result };
   }
 
-  static #get_result(results, callback, weeks) {
+  #get_result(results, callback, weeks) {
     const result = results.find((result) => result.weeks === weeks);
     if (result) {
-      return result.defects;
+      return result;
     }
+
+    const input = callback(weeks);
 
     const entry = {
       weeks,
-      defects: this.#process_result(Array.fromAsync(callback(weeks))),
+      defects: ME.#process_result(Array.fromAsync(this.#search(input, 500))),
+      link: create_link(input),
     };
     results.push(entry);
-    return entry.defects;
+    return entry;
   }
 
   #open = [];
   #closed = [];
   #opened = [];
+  #controller = new AbortController();
 
   constructor() {}
 
-  async open_defects(severity) {
-    if (!severity) {
-      return (await ME.#get_result(this.#open, total_open, Infinity)).result;
-    }
-
-    return (await ME.#get_result(this.#open, total_open, Infinity))[severity];
+  async #run(results, callback, weeks, severity) {
+    const { defects, link } = this.#get_result(results, callback, weeks);
+    const { label, discriminator } = formatting(severity);
+    const result = await defects;
+    return `<a href="${link}&${discriminator}">${result[label]}</a>`;
   }
 
-  async closed_defects(weeks, severity) {
-    if (!severity) {
-      return (await ME.#get_result(this.#closed, closed, weeks)).result;
-    }
+  async #run2(results, callback, weeks) {
+    const { defects } = this.#get_result(results, callback, weeks);
+    const result = await defects;
+    return result.weighted_result;
+  }
 
-    return (await ME.#get_result(this.#closed, closed, weeks))[severity];
+  open_defects(severity) {
+    return this.#run(this.#open, total_open, Infinity);
+  }
+
+  closed_defects(weeks, severity) {
+    return this.#run(this.#closed, closed, weeks, severity);
   }
 
   async opened_defects(weeks, severity) {
-    if (!severity) {
-      return (await ME.#get_result(this.#opened, opened, weeks)).result;
-    }
-
-    return (await ME.#get_result(this.#opened, opened, weeks))[severity];
+    return this.#run(this.#opened, opened, weeks, severity);
   }
 
   async weighted_open_defects() {
-    return (await ME.#get_result(this.#open, total_open, Infinity))
-      .weighted_result;
+    return this.#run2(this.#open, total_open, Infinity);
   }
 
   async weighted_closed_defects(weeks) {
-    return (await ME.#get_result(this.#closed, closed, weeks)).weighted_result;
+    return this.#run2(this.#closed, closed, weeks);
   }
 
   async weighted_opened_defects(weeks) {
-    return (await ME.#get_result(this.#opened, opened, weeks)).weighted_result;
+    return this.#run2(this.#opened, opened, weeks);
   }
 
   async maintenance_effectiveness(weeks) {
@@ -285,5 +227,9 @@ class ME {
     }
 
     return 1 / 0;
+  }
+
+  abort() {
+    this.#controller.abort();
   }
 }

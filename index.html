@@ -6,7 +6,8 @@
     }
 
     .error {
-      background-color: lightred;
+      background-color: red;
+      opacity: 65%;
     }
   </style>
 </head>
@@ -50,13 +51,19 @@
   </tr>
 </table>
 
+<br />
+
+<input type="button" id="abort" value="Abort" />
+
 <script src="me.js"></script>
 <script>
+  const once = true;
+
   function add_cell(weeks, callback, row) {
     let cell = document.createElement("td");
     row.appendChild(cell);
     return callback(weeks)
-      .then((result) => (cell.innerText = result))
+      .then((result) => (cell.innerHTML = result))
       .catch((_) => cell.setAttribute("class", "error"));
   }
 
@@ -113,8 +120,10 @@
       promises.push(add_cell(null, callback, totals.lastChild));
     }
 
+    abort.addEventListener("click", () => me.abort(), { once });
+
     await Promise.all(promises);
   }
 
-  addEventListener("load", fill, { once: true });
+  addEventListener("load", fill, { once });
 </script>
